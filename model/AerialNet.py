@@ -77,21 +77,22 @@ class FeatureL2Norm(torch.nn.Module):
         #        print(feature.size())
         #        print(torch.pow(torch.sum(torch.pow(feature,2),1)+epsilon,0.5).size())
         norm = torch.pow(torch.sum(torch.pow(feature, 2), 1) + epsilon, 0.5).unsqueeze(1).expand_as(feature)
-        return torch.div(feature, norm)
+        return torch.div(feature, norm)     # NOTE - div 数组的点除运算
 
 
 class FeatureCorrelation(torch.nn.Module):
     def __init__(self):
         super(FeatureCorrelation, self).__init__()
 
-    def forward(self, feature_A, feature_B):
-        b, c, h, w = feature_A.size()
+    def forward(self, feature_A: torch.Tensor, feature_B: torch.Tensor):
+        b, c, h, w = feature_A.size()   # NOTE - batch_size, channels, height, width
         # reshape features for matrix multiplication
-        feature_A = feature_A.transpose(2, 3).contiguous().view(b, c, h * w)
-        feature_B = feature_B.view(b, c, h * w).transpose(1, 2)
+        feature_A = feature_A.transpose(2, 3).contiguous().view(b, c, h * w)    # 交换了height和width的维度，每张图像的每个通道排成一个一维向量
+        feature_B = feature_B.view(b, c, h * w).transpose(1, 2) # 交换了channel和width*height的维度。（为了后面的乘法）
         # perform matrix mult.
-        feature_mul = torch.bmm(feature_B, feature_A)
-        correlation_tensor = feature_mul.view(b, h, w, h * w).transpose(2, 3).transpose(1, 2)
+        feature_mul = torch.bmm(feature_B, feature_A)   # 后两维的矩阵乘法，得到的张量size为(b, w*h, w*h)
+        # correlation_tensor = feature_mul.view(b, h, w, h * w).transpose(2, 3).transpose(1, 2) # 原始
+        correlation_tensor = feature_mul.view(b, h, w, h * w).permute(0, 3, 1, 2)   # 改成permute会更简洁，correlation_tensor的大小是(b, h*w, h, w)
         return correlation_tensor
 
 
@@ -99,32 +100,40 @@ class FeatureRegression(nn.Module):
     def __init__(self, output_dim=6, use_cuda=True):
         super(FeatureRegression, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(15 * 15, 128, kernel_size=7, padding=0),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(in_channels=15 * 15, out_channels=128, kernel_size=7, padding=0),
+            # 输入是(N,C_in,H,W)，输出是(N,C_out,H_out,W_out)
+            nn.BatchNorm2d(128),    # 在卷积神经网络的卷积层之后总会添加BatchNorm2d进行数据的归一化处理，这使得数据在进行Relu之前不会因为数据过大而导致网络性能的不稳定。
             nn.ReLU(inplace=True),
             nn.Conv2d(128, 64, kernel_size=5, padding=0),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
         )
         self.linear = nn.Linear(64 * 5 * 5, output_dim)
+        # nn.Linear定义一个神经网络的线性层，方法签名如下：
+        # torch.nn.Linear(in_features, # 输入的神经元个数
+        # out_features, # 输出神经元个数
+        # bias=True # 是否包含偏置
+        # )
         if use_cuda:
             self.conv.cuda()
             self.linear.cuda()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         x = self.conv(x)
         x = x.view(x.size(0), -1)
-        x = self.linear(x)
+        # NOTE - -1表示根据其他维度的输入自动计算剩余维度的数值，比如这里就是吧1维变成(x.size(0), x的元素数/x.size(0))
+        # 相当于把输出的(N,C_out,H_out,W_out)中除了N（batch_size）外的其他维度展平成向量，大小为(N,C_out*H_out*W_out）
+        x = self.linear(x)  # y=xA^T+b. 只有张量中的最后一维参与计算
         return x
 
 class net_single_stream(nn.Module):
-    def __init__(self, geometric_model='affine',
+    def __init__(self, geometric_model='affine',    # NOTE - affine仿射变换
                  normalize_features=True,
                  normalize_matches=True, batch_normalization=True,
                  use_cuda=True,
                  feature_extraction_cnn='se_resnext101',
                  train_fe=False):
-        super(net_single_stream, self).__init__()
+        super(net_single_stream, self).__init__()   # NOTE - 继承父类的方法
         self.use_cuda = use_cuda
         self.normalize_features = normalize_features
         self.normalize_matches = normalize_matches
@@ -132,12 +141,12 @@ class net_single_stream(nn.Module):
                                                    use_cuda=self.use_cuda,
                                                    feature_extraction_cnn=feature_extraction_cnn)
         self.FeatureL2Norm = FeatureL2Norm()
-        self.LocalPreserve = nn.AvgPool2d(kernel_size=3, stride=1)
+        self.LocalPreserve = nn.AvgPool2d(kernel_size=3, stride=1)  # NOTE - 二维平均池化，池化窗口为3*3，步长为1
         self.FeatureCorrelation = FeatureCorrelation()
         if geometric_model=='affine':
-            output_dim = 6
-        self.FeatureRegression = FeatureRegression(output_dim, use_cuda=self.use_cuda)
-        self.ReLU = nn.ReLU(inplace=True)
+            output_dim = 6  # 6自由度的仿射变换
+        self.FeatureRegression = FeatureRegression(output_dim, use_cuda=self.use_cuda)  
+        self.ReLU = nn.ReLU(inplace=True)   # inplace = True时，会修改输入对象的值，所以打印出对象存储地址相同，类似于C语言的址传递
 
     def forward(self, tnf_batch):
         # do feature extraction
@@ -149,8 +158,8 @@ class net_single_stream(nn.Module):
             feature_B = self.FeatureL2Norm(feature_B)
 
         # do feature correlation symmetrically
-        correlation_AB = self.FeatureCorrelation(feature_A,feature_B)
-        correlation_BA = self.FeatureCorrelation(feature_B,feature_A)
+        correlation_AB = self.FeatureCorrelation(feature_A,feature_B)   # A到B的相关矩阵
+        correlation_BA = self.FeatureCorrelation(feature_B,feature_A)   # B到A的相关矩阵
 
         # normalize (correlation maps)
         if self.normalize_matches:

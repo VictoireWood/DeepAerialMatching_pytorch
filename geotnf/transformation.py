@@ -6,7 +6,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 
-class GeometricTnf(object):
+class GeometricTnf(object): # 父类是Object，object是所有class的父类
     """
 
     Geometric transfromation to an image batch (wrapped in a PyTorch Variable)
@@ -24,7 +24,7 @@ class GeometricTnf(object):
         if use_cuda:
             self.theta_identity = self.theta_identity.cuda()
 
-    def __call__(self, image_batch, theta_batch=None, padding_factor=1.0, crop_factor=1.0):
+    def __call__(self, image_batch: torch.Tensor, theta_batch=None, padding_factor=1.0, crop_factor=1.0):     # 在类中实现这一方法可以使该类的实例（对象）像函数一样被调用。<https://blog.csdn.net/weixin_43593330/article/details/108174666>
         b, c, h, w = image_batch.size()
         if theta_batch is None:
             theta_batch = self.theta_identity
@@ -141,9 +141,12 @@ class SynthPairTnf_pck(object):
         trg_image_batch = self.symmetricImagePad(trg_image_batch, self.padding_factor)
 
         # convert to variables
-        src_image_batch = Variable(src_image_batch, requires_grad=False)
-        trg_image_batch = Variable(trg_image_batch, requires_grad=False)
-        theta_batch = Variable(theta_batch, requires_grad=False)
+        # src_image_batch = Variable(src_image_batch, requires_grad=False)
+        # trg_image_batch = Variable(trg_image_batch, requires_grad=False)
+        # theta_batch = Variable(theta_batch, requires_grad=False)
+        src_image_batch = src_image_batch.requires_grad_(False)
+        trg_image_batch = trg_image_batch.requires_grad_(False)
+        theta_batch = theta_batch.requires_grad_(False)
 
         # get cropped image
         cropped_image_batch = self.rescalingTnf(src_image_batch, None, self.padding_factor, self.crop_factor)  # Identity is used as no theta given
@@ -178,11 +181,11 @@ class AffineGridGen(Module):
         self.out_w = out_w
         self.out_ch = out_ch
 
-    def forward(self, theta):
+    def forward(self, theta: torch.Tensor):
         theta = theta.contiguous()
         batch_size = theta.size()[0]
-        out_size = torch.Size((batch_size, self.out_ch, self.out_h, self.out_w))
-        return F.affine_grid(theta, out_size)
+        out_size = torch.Size((batch_size, self.out_ch, self.out_h, self.out_w))    # 生成一个torch.size类的数据，和tensor.size()的结果的类型一样
+        return F.affine_grid(theta, out_size)   # theta: (Batch_size, 2, 3)大小的仿射变换矩阵（就是把单应性矩阵的最后一行[0, 0, 1]给去掉之后剩下的
 
 def theta2homogeneous(theta):
     batch_size = theta.size(0)

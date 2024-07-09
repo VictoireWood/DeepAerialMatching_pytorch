@@ -40,12 +40,15 @@ use_cuda = torch.cuda.is_available()
 print('Creating CNN model...')
 model = net(use_cuda=use_cuda, geometric_model='affine', feature_extraction_cnn=feature_extraction_cnn)
 
-pickle.load = partial(pickle.load, encoding="latin1")
-pickle.Unpickler = partial(pickle.Unpickler, encoding="latin1")
+pickle.load = partial(pickle.load, encoding="latin1")   # 从已打开的 file object 文件 中读取封存后的对象，重建其中特定对象的层次结构并返回。它相当于 Unpickler(file).load()。
+pickle.Unpickler = partial(pickle.Unpickler, encoding="latin1") # 它接受一个二进制文件用于读取 pickle 数据流。
+# NOTE - 读取 NumPy array 和 Python 2 存储的 datetime、date 和 time 实例时，请使用 encoding='latin1'。
+# <https://docs.python.org/zh-cn/3/library/pickle.html>
 
 # Load trained weights
 print('Loading trained model weights...')
 checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage)
+# <https://blog.csdn.net/bc521bc/article/details/85623515> 将GPU上训练好的模型加载到CPU上
 model.load_state_dict(checkpoint['state_dict'])
 print("Reloading from--[%s]" % model_path)
 
