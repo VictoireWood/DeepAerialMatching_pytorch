@@ -25,7 +25,7 @@ class SynthDataset(Dataset):
             
     """
 
-    def __init__(self, csv_file, training_image_path, output_size=(540,540), geometric_model='affine', transform=None,
+    def __init__(self, csv_file, training_image_path, output_size=(500,500), geometric_model='affine', transform=None,
                  random_sample=False, random_t=0.5, random_s=0.5, random_alpha=1/2):
         self.random_sample = random_sample
         self.random_t = random_t
@@ -36,7 +36,8 @@ class SynthDataset(Dataset):
         self.train_data = pd.read_csv(csv_file)
         self.src_img_names = self.train_data.iloc[:,0]
         self.trg_img_names = self.train_data.iloc[:,1]
-        self.theta_array = self.train_data.iloc[:, 2:].values.astype('float')
+        # self.theta_array = self.train_data.iloc[:, 2:].values.astype('float')
+        self.theta_array = self.train_data.iloc[:, -6:].values.astype('float')
         # copy arguments
         self.training_image_path = training_image_path
         self.transform = transform

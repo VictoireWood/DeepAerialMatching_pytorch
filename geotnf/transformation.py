@@ -14,7 +14,7 @@ class GeometricTnf(object): # 父类是Object，object是所有class的父类
 
     """
 
-    def __init__(self, geometric_model='affine', out_h=240, out_w=240, use_cuda=True):
+    def __init__(self, geometric_model='affine', out_h=280, out_w=280, use_cuda=True):
         self.out_h = out_h
         self.out_w = out_w
         self.use_cuda = use_cuda
@@ -25,18 +25,19 @@ class GeometricTnf(object): # 父类是Object，object是所有class的父类
             self.theta_identity = self.theta_identity.cuda()
 
     def __call__(self, image_batch: torch.Tensor, theta_batch=None, padding_factor=1.0, crop_factor=1.0):     # 在类中实现这一方法可以使该类的实例（对象）像函数一样被调用。<https://blog.csdn.net/weixin_43593330/article/details/108174666>
+        # 引用实例的时候，目的是将图像按照theta_batch进行仿射变换
         b, c, h, w = image_batch.size()
         if theta_batch is None:
             theta_batch = self.theta_identity
             theta_batch = theta_batch.expand(b, 2, 3)
-            theta_batch = Variable(theta_batch, requires_grad=False)
+            theta_batch = theta_batch.requires_grad_(False)
 
         sampling_grid = self.gridGen(theta_batch)
 
         # rescale grid according to crop_factor and padding_factor
         sampling_grid.data = sampling_grid.data * padding_factor * crop_factor
         # sample transformed image
-        warped_image_batch = F.grid_sample(image_batch, sampling_grid)
+        warped_image_batch = F.grid_sample(image_batch, sampling_grid)      # 对image_batch进行仿射变换，引用实例时根据输入的theta对输入图像进行仿射变换
 
         return warped_image_batch
 
@@ -48,7 +49,7 @@ class SynthPairTnf(object):
 
     """
 
-    def __init__(self, use_cuda=True, geometric_model='affine', crop_factor=9 / 16, output_size=(240, 240),
+    def __init__(self, use_cuda=True, geometric_model='affine', crop_factor=9 / 16, output_size=(280, 280),
                  padding_factor=0.5):
         assert isinstance(use_cuda, (bool))
         assert isinstance(crop_factor, (float))
@@ -65,6 +66,7 @@ class SynthPairTnf(object):
 
     def __call__(self, batch):
         src_image_batch, trg_image_batch, trg_image_jit_batch, theta_batch = batch['src_image'], batch['trg_image'], batch['trg_image_jit'], batch['theta']
+        # source图像、target图像、随机颜色版target图像、仿射变换theta真值
 
         if self.use_cuda:
             src_image_batch = src_image_batch.cuda()
@@ -80,12 +82,18 @@ class SynthPairTnf(object):
         trg_image_jit_batch = self.symmetricImagePad(trg_image_jit_batch, self.padding_factor)
 
         # convert to variables
-        src_image_batch = Variable(src_image_batch, requires_grad=False)
-        trg_image_batch = Variable(trg_image_batch, requires_grad=False)
-        trg_image_jit_batch = Variable(trg_image_jit_batch, requires_grad=False)
-        theta_batch = Variable(theta_batch, requires_grad=False)
+        src_image_batch = src_image_batch.requires_grad_(False)
+        trg_image_batch = trg_image_batch.requires_grad_(False)
+        trg_image_jit_batch = trg_image_jit_batch.requires_grad_(False)
+        theta_batch = theta_batch.requires_grad_(False)
+        # src_image_batch = Variable(src_image_batch, requires_grad=False)
+        # trg_image_batch = Variable(trg_image_batch, requires_grad=False)
+        # trg_image_jit_batch = Variable(trg_image_jit_batch, requires_grad=False)
+        # theta_batch = Variable(theta_batch, requires_grad=False)
+        
 
         # get cropped image
+        # NOTE - 只进行rescale，不进行仿射变换
         cropped_image_batch = self.rescalingTnf(src_image_batch, None, self.padding_factor, self.crop_factor)  # Identity is used as no theta given
         # get transformed image
         warped_image_batch = self.geometricTnf(trg_image_batch, theta_batch, self.padding_factor, self.crop_factor)  # Identity is used as no theta given
@@ -94,10 +102,11 @@ class SynthPairTnf(object):
         return {'source_image': cropped_image_batch, 'target_image': warped_image_batch, 'target_image_jit':warped_image_jit_batch, 'theta_GT': theta_batch}
 
     def symmetricImagePad(self, image_batch, padding_factor):
+        # 对图像进行镜像填充padding
         b, c, h, w = image_batch.size()
-        pad_h, pad_w = int(h * padding_factor), int(w * padding_factor)
-        idx_pad_left = torch.LongTensor(range(pad_w - 1, -1, -1))
-        idx_pad_right = torch.LongTensor(range(w - 1, w - pad_w - 1, -1))
+        pad_h, pad_w = int(h * padding_factor), int(w * padding_factor)     # 单侧padding的高度和宽度
+        idx_pad_left = torch.LongTensor(range(pad_w - 1, -1, -1))           # 第一个元素是pad_w - 1，最后一个元素是0
+        idx_pad_right = torch.LongTensor(range(w - 1, w - pad_w - 1, -1))   # 第一个元素是w-1，最后一个元素是w-pad_w
         idx_pad_top = torch.LongTensor(range(pad_h - 1, -1, -1))
         idx_pad_bottom = torch.LongTensor(range(h - 1, h - pad_h - 1, -1))
         if self.use_cuda:
@@ -118,7 +127,7 @@ class SynthPairTnf_pck(object):
 
     """
 
-    def __init__(self, use_cuda=True, geometric_model='affine', crop_factor=9 / 16, output_size=(240, 240),
+    def __init__(self, use_cuda=True, geometric_model='affine', crop_factor=9 / 16, output_size=(280, 280), # NOTE - 原来是240的地方全部改成280来凑出14的整数倍，符合dinov2输入要求
                  padding_factor=0.5):
         assert isinstance(use_cuda, (bool))
         assert isinstance(crop_factor, (float))
@@ -141,12 +150,12 @@ class SynthPairTnf_pck(object):
         trg_image_batch = self.symmetricImagePad(trg_image_batch, self.padding_factor)
 
         # convert to variables
-        # src_image_batch = Variable(src_image_batch, requires_grad=False)
-        # trg_image_batch = Variable(trg_image_batch, requires_grad=False)
-        # theta_batch = Variable(theta_batch, requires_grad=False)
         src_image_batch = src_image_batch.requires_grad_(False)
         trg_image_batch = trg_image_batch.requires_grad_(False)
         theta_batch = theta_batch.requires_grad_(False)
+        # src_image_batch = Variable(src_image_batch, requires_grad=False)
+        # trg_image_batch = Variable(trg_image_batch, requires_grad=False)
+        # theta_batch = Variable(theta_batch, requires_grad=False)
 
         # get cropped image
         cropped_image_batch = self.rescalingTnf(src_image_batch, None, self.padding_factor, self.crop_factor)  # Identity is used as no theta given
@@ -175,7 +184,7 @@ class SynthPairTnf_pck(object):
 
 
 class AffineGridGen(Module):
-    def __init__(self, out_h=240, out_w=240, out_ch=3):
+    def __init__(self, out_h=280, out_w=280, out_ch=3):
         super(AffineGridGen, self).__init__()
         self.out_h = out_h
         self.out_w = out_w

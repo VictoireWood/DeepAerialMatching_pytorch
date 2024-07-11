@@ -30,7 +30,9 @@ class TransformedGridLoss(nn.Module):
         if self.geometric_model == 'affine':
             theta_GT_mat_AB = theta_GT_AB.view(-1, 2, 3)
             # inverse GT batch
-            theta_GT_mat_temp = torch.cat((theta_GT_mat_AB, (torch.cuda.FloatTensor([0, 0, 1]).unsqueeze(0).unsqueeze(1).expand(batch_size, 1, 3))), 1)
+            # theta_GT_mat_temp = torch.cat((theta_GT_mat_AB, (torch.cuda.FloatTensor([0, 0, 1]).unsqueeze(0).unsqueeze(1).expand(batch_size, 1, 3))), 1)
+            
+            theta_GT_mat_temp = torch.cat((theta_GT_mat_AB, (torch.FloatTensor([0, 0, 1]).unsqueeze(0).unsqueeze(1).expand(batch_size, 1, 3))), 1) # NOTE - 邵星雨没有cuda
             for i in range(batch_size):
                 theta_GT_mat_temp[i] = theta_GT_mat_temp[i].inverse()
             theta_GT_BA = theta_GT_mat_temp.view(-1,9)[:, :6]

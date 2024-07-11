@@ -27,16 +27,18 @@ class NormalizeImageDict(object):
         return  sample
     
     
-def normalize_image(image, forward=True, mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225]):
+def normalize_image(image: torch.Tensor, forward=True, mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225]):
         im_size = image.size()
         mean=torch.FloatTensor(mean).unsqueeze(1).unsqueeze(2)
         std=torch.FloatTensor(std).unsqueeze(1).unsqueeze(2)
         if image.is_cuda:
             mean = mean.cuda()
             std = std.cuda()
-        if isinstance(image,torch.autograd.Variable):
-            mean = Variable(mean,requires_grad=False)
-            std = Variable(std,requires_grad=False)
+        # if isinstance(image,torch.autograd.Variable):
+        #     mean = Variable(mean,requires_grad=False)
+        #     std = Variable(std,requires_grad=False)
+        mean = mean.requires_grad_(False)
+        std = std.requires_grad_(False)
         if forward:
             if len(im_size)==3:
                 result = image.sub(mean.expand(im_size)).div(std.expand(im_size))
@@ -48,4 +50,4 @@ def normalize_image(image, forward=True, mean=[0.485, 0.456, 0.406],std=[0.229, 
             elif len(im_size)==4:
                 result = image.mul(std.unsqueeze(0).expand(im_size)).add(mean.unsqueeze(0).expand(im_size))
                 
-        return  result
+        return result

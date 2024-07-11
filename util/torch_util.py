@@ -5,6 +5,7 @@ from os import makedirs, remove
 from os.path import exists, join, basename, dirname
 from termcolor import cprint
 import collections
+import argparse
 
 class BatchTensorToVars(object):
     """Convert tensors in dict batch to vars

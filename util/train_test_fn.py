@@ -8,7 +8,7 @@ from time import time
 from util.torch_util import BatchTensorToVars
 from geotnf.point_tnf import *
 
-def train(epoch,model,loss_fn,optimizer,dataloader,pair_generation_tnf,use_cuda=True,log_interval=50):
+def train(epoch,model,loss_fn,optimizer,dataloader,pair_generation_tnf,use_cuda=torch.cuda.is_available(),log_interval=50):
     model.train()
     train_loss = 0
     start_time = time()

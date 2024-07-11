@@ -39,6 +39,7 @@ use_cuda = torch.cuda.is_available()
 # Create model
 print('Creating CNN model...')
 model = net(use_cuda=use_cuda, geometric_model='affine', feature_extraction_cnn=feature_extraction_cnn)
+# net_single_stream - 不训练的时候使用Single Stream，训练的时候使用Double Stream
 
 pickle.load = partial(pickle.load, encoding="latin1")   # 从已打开的 file object 文件 中读取封存后的对象，重建其中特定对象的层次结构并返回。它相当于 Unpickler(file).load()。
 pickle.Unpickler = partial(pickle.Unpickler, encoding="latin1") # 它接受一个二进制文件用于读取 pickle 数据流。
@@ -54,7 +55,7 @@ print("Reloading from--[%s]" % model_path)
 
 
 ### Load and preprocess images
-resize = GeometricTnf(out_h=240, out_w=240, use_cuda=False)
+resize = GeometricTnf(out_h=280, out_w=280, use_cuda=False)
 normalizeTnf = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
 def Im2Tensor(image):
@@ -66,21 +67,24 @@ def Im2Tensor(image):
         image_var = image_var.cuda()
     return image_var
 
-def preprocess_image(image):
+def preprocess_image(image: np.ndarray) -> torch.Tensor:    # 图像预处理
     # convert to torch Variable
-    image = np.expand_dims(image.transpose((2, 0, 1)), 0)
-    image = torch.Tensor(image.astype(np.float32) / 255.0)
-    image_var = Variable(image, requires_grad=False)
+    image = np.expand_dims(image.transpose((2, 0, 1)), 0)   # H,W,Channel -> Channel,H,W
+    image = torch.Tensor(image.astype(np.float32) / 255.0, requires_grad=False)
+    # image_var = Variable(image, requires_grad=False)
 
     # Resize image using bilinear sampling with identity affine tnf
-    image_var = resize(image_var)
+    image = resize(image)   # 这里没有输入仿射变换参数，只是对图像的大小做了一个变换
+    # image_var = resize(image_var)
 
     # Normalize image
-    image_var = normalize_image(image_var)
+    image = normalize_image(image)
+    # image_var = normalize_image(image_var)
 
-    return image_var
+    return image    # 返回重采样并归一化的图像tensor
+    # return image_var
 
-source_image = io.imread(source_image_path)
+source_image = io.imread(source_image_path) # skimage.io.imread 返回的是 numpy.ndarray
 target_image = io.imread(target_image_path)
 
 source_image_var = preprocess_image(source_image)
@@ -96,10 +100,11 @@ affTnf = GeometricTnf(geometric_model='affine', out_h=target_image.shape[0], out
 
 batch = {'source_image': source_image_var, 'target_image':target_image_var}
 
-resizeTgt = GeometricTnf(out_h=target_image.shape[0], out_w=target_image.shape[1], use_cuda = use_cuda)
+# resizeTgt = GeometricTnf(out_h=target_image.shape[0], out_w=target_image.shape[1], use_cuda = use_cuda)
 
 ### Evaluate model
 model.eval()
+# 可以选evaluate或者train，.eval()等价于.train(False)
 
 start_time = time.time()
 # Evaluate models
@@ -108,11 +113,12 @@ theta_aff, theta_aff_inv = model(batch)
 
 # Calculate theta_aff_2
 batch_size = theta_aff.size(0)
-theta_aff_inv = theta_aff_inv.view(-1, 2, 3)
+theta_aff_inv = theta_aff_inv.view(-1, 2, 3)    # 变成(batch_size,2,3)的仿射参数矩阵，加一行[0, 0, 1]就是单应矩阵
 theta_aff_inv = torch.cat((theta_aff_inv, (torch.Tensor([0, 0, 1]).to('cuda').unsqueeze(0).unsqueeze(1).expand(batch_size, 1, 3))), 1)
 theta_aff_2 = theta_aff_inv.inverse().contiguous().view(-1, 9)[:, :6]
 
 theta_aff_ensemble = (theta_aff + theta_aff_2) / 2  # Ensemble
+# 这里用算数平均值
 
 ### Process result
 warped_image_aff = affTnf(Im2Tensor(source_image), theta_aff_ensemble.view(-1,2,3))
@@ -120,6 +126,7 @@ result_aff_np = warped_image_aff.squeeze(0).transpose(0,1).transpose(1,2).cpu().
 io.imsave('results/aff.jpg', result_aff_np)
 
 """2nd Affine"""
+# 给图像做两次warp，类似于dlk取两次地图模板
 # Preprocess source_image_2
 source_image_2 = normalize_image(resize(warped_image_aff.cpu()))
 if use_cuda:

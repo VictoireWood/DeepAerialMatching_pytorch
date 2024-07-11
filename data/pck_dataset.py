@@ -81,7 +81,7 @@ class GoogleEarthPCK(Dataset):
         return theta_GT
 
 class GoogleEarthPCK_v2(Dataset):
-    def __init__(self, csv_file, test_image_path, output_size=(240, 240), transform=None):
+    def __init__(self, csv_file, test_image_path, output_size=(280, 280), transform=None):
         self.out_h, self.out_w = output_size
         self.test_data = pd.read_csv(csv_file)
         self.src_names = self.test_data.iloc[:, 0]
