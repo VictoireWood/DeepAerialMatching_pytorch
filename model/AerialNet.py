@@ -197,6 +197,8 @@ class FeatureCorrelation(torch.nn.Module):
 
 
 class FeatureRegression(nn.Module):
+    # FIXME - 如果想优化这个模型，可以从Regression Net入手
+    # 参考ADRNet: Affine and Deformable Registration Networks for Multimodal Remote Sensing Images
     def __init__(self, output_dim=6, use_cuda=True):
         super(FeatureRegression, self).__init__()
         self.conv = nn.Sequential(

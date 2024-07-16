@@ -41,7 +41,7 @@ if __name__ == '__main__':
     # Model parameters
     parser.add_argument('--geometric-model', type=str, default='affine', help='geometric model to be regressed at output: affine parameters (6 degrees of freedom)')
     parser.add_argument('--use-mse-loss', type=str_to_bool, nargs='?', const=True, default=False, help='Use MSE loss on tnf. parameters')
-    parser.add_argument('--dinov2-model_name', type=str, default='dinov2_vitb14', help='Feature extraction architecture: dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14')
+    parser.add_argument('--dinov2-model-name', type=str, default='dinov2_vitb14', help='Feature extraction architecture: dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14')
     parser.add_argument('--train-fe', type=str_to_bool, nargs='?', const=True, default=True, help='True: train feature extraction or False: freeze feature extraction')
     # Synthetic dataset parameters
     parser.add_argument('--random-sample', type=str_to_bool, nargs='?', const=True, default=False, help='sample random transformations')

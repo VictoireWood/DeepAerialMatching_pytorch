@@ -1,10 +1,11 @@
 from __future__ import print_function, division
 
-from torch.autograd import Variable
+# from torch.autograd import Variable
 from torchvision.transforms import Normalize
 
 import torch
-from model.AerialNet import net_single_stream as net
+# from model.AerialNet import net_single_stream as net
+from model.AerialNet import dinov2_net_single_stream as net
 from image.normalization import NormalizeImageDict, normalize_image
 from util.checkboard import createCheckBoard
 from geotnf.transformation import GeometricTnf, theta2homogeneous
@@ -27,7 +28,8 @@ warnings.filterwarnings('ignore')
 # torch.cuda.set_device(1) # Using second GPU
 
 ### Parameter
-feature_extraction_cnn = 'se_resnext101'
+# feature_extraction_cnn = 'se_resnext101'
+dinov2_model_name = 'dinov2_vitb14'
 model_path = 'trained_models/checkpoint.pth.tar'
 
 source_image_path='failure_cases/source_438.jpg'
@@ -37,12 +39,14 @@ target_image_path='failure_cases/target_438.jpg'
 use_cuda = torch.cuda.is_available()
 
 # Create model
-print('Creating CNN model...')
-model = net(use_cuda=use_cuda, geometric_model='affine', feature_extraction_cnn=feature_extraction_cnn)
-# net_single_stream - 不训练的时候使用Single Stream，训练的时候使用Double Stream
+print('Creating DINOv2 model...')
+# model = net(use_cuda=use_cuda, geometric_model='affine', feature_extraction_cnn=feature_extraction_cnn)
+model = net(geometric_model='affine',dinov2_model_name=dinov2_model_name)
 
-pickle.load = partial(pickle.load, encoding="latin1")   # 从已打开的 file object 文件 中读取封存后的对象，重建其中特定对象的层次结构并返回。它相当于 Unpickler(file).load()。
-pickle.Unpickler = partial(pickle.Unpickler, encoding="latin1") # 它接受一个二进制文件用于读取 pickle 数据流。
+# NOTE - net_single_stream - 不训练的时候使用Single Stream，训练的时候使用Double Stream
+
+# pickle.load = partial(pickle.load, encoding="latin1")   # 从已打开的 file object 文件 中读取封存后的对象，重建其中特定对象的层次结构并返回。它相当于 Unpickler(file).load()。
+# pickle.Unpickler = partial(pickle.Unpickler, encoding="latin1") # 它接受一个二进制文件用于读取 pickle 数据流。
 # NOTE - 读取 NumPy array 和 Python 2 存储的 datetime、date 和 time 实例时，请使用 encoding='latin1'。
 # <https://docs.python.org/zh-cn/3/library/pickle.html>
 
@@ -55,10 +59,11 @@ print("Reloading from--[%s]" % model_path)
 
 
 ### Load and preprocess images
+# resize = GeometricTnf(out_h=240, out_w=240, use_cuda=False)
 resize = GeometricTnf(out_h=280, out_w=280, use_cuda=False)
 normalizeTnf = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-def Im2Tensor(image):
+def Im2Tensor(image: np.ndarray) -> torch.Tensor:
     image = np.expand_dims(image.transpose((2, 0, 1)), 0)
     image = torch.Tensor(image.astype(np.float32) / 255.0)
     image_var = Variable(image, requires_grad=False)

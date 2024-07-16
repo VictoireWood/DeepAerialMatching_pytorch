@@ -196,7 +196,7 @@ class AffineGridGen(Module):
         out_size = torch.Size((batch_size, self.out_ch, self.out_h, self.out_w))    # 生成一个torch.size类的数据，和tensor.size()的结果的类型一样
         return F.affine_grid(theta, out_size)   # theta: (Batch_size, 2, 3)大小的仿射变换矩阵（就是把单应性矩阵的最后一行[0, 0, 1]给去掉之后剩下的
 
-def theta2homogeneous(theta):
+def theta2homogeneous(theta: torch.Tensor) -> torch.Tensor:
     batch_size = theta.size(0)
     theta = theta.view(-1, 2, 3)
     theta = torch.cat((theta, (torch.Tensor([0, 0, 1]).to('cuda').unsqueeze(0).unsqueeze(1).expand(batch_size, 1, 3))), 1)
